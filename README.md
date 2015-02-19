@@ -1,2 +1,1 @@
-# lilysing
-LilyPond and MBROLA
+This program extracts data from [LilyPond](http://lilypond.org/) scores and sings them by creating [MBROLA](http://tcts.fpms.ac.be/synthesis/mbrola.html) phonetics files.
