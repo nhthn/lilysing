@@ -1,5 +1,7 @@
+#!/usr/bin/env python3
+
 import warnings
-from operator import attrgetter
+from operator import itemgetter, attrgetter
 from string import digits, ascii_uppercase
 import re
 
@@ -12,12 +14,12 @@ CONSONANTS = '_ p p_h t t_h 4 k k_h b d g f s S tS T v z Z dZ D m n N l r j w h'
 VOWELS = 'r= i A u I E { V U @ EI AI OI @U aU O Or'.split()
 
 CONSONANT_DURS = {
-	'_': 60,
-	't': 60,
-	'r': 60,
-	'b': 60,
-	'n': 80,
-	'default': 60
+	'_': 40,
+	't': 40,
+	'r': 40,
+	'b': 40,
+	'n': 30,
+	'default': 40
 }
 
 cmu_vowel_re = re.compile(r'^(\w+)(\d+)$')
@@ -116,6 +118,7 @@ class AbsScore:
 	'''A score with absolutely timed and possibly overlapping note and lyric events.'''
 
 	def __init__(self):
+		self.lines = []
 		self.notes = []
 		self.syllables = []
 		self.coda = 0.0
@@ -128,36 +131,55 @@ class AbsScore:
 	def simultaneous(t1, t2):
 		return abs(t1 - t2) < 1e-5
 
-	def readLilyLine(self, line):
+	def readLine(self, line):
 		line = line.strip().split('\t')
 		if len(line) < 2:
 			return
-		if line[1] == 'note':
-			start = float(line[0])
-			num = int(line[2])
-			dur = float(line[4])
-			self.notes.append(AbsNote(start, dur, num))
-			self.coda = max(self.coda, start + dur)
-		elif line[1] == 'lyric':
-			start = float(line[0])
-			text = line[2]
-			mode = line[3]
-			if mode == 'text':
-				self.syllables.append(AbsSyllable(start, TextSyllable(text)))
+		line[0] = float(line[0])
+		self.lines.append(line)
+
+	def processLines(self):
+		acceptedEvents = ('lilysing', 'note', 'lyric', 'text', 'hyphen', 'rest')
+		self.lines = [line for line in self.lines if line[1] in acceptedEvents]
+		self.lines.sort(key=lambda line: acceptedEvents.index(line[1]))
+		self.lines.sort(key=itemgetter(0))
+
+		lyricmode = 'phon'
+
+		for line in self.lines:
+
+			evtype = line[1]
+
+			if evtype == 'lilysing':
+				if line[2] == 'textmode':
+					lyricmode = 'text'
+				elif line[2] == 'phonmode':
+					lyricmode = 'phon'
+			elif evtype == 'note':
+				start = float(line[0])
+				num = int(line[2])
+				dur = float(line[4])
+				self.notes.append(AbsNote(start, dur, num))
+				self.coda = max(self.coda, start + dur)
+			elif evtype == 'lyric':
+				start = float(line[0])
+				text = line[2]
+				if lyricmode == 'text':
+					self.syllables.append(AbsSyllable(start, TextSyllable(text)))
+				else:
+					self.syllables.append(AbsSyllable(start, Syllable.fromPhonNotation(text)))
+				self.coda = max(self.coda, start)
+			elif evtype == 'hyphen':
+				start = float(line[0])
+				self.hyphens.append(AbsHyphen(start))
+				self.coda = max(self.coda, start)
+			elif evtype == 'rest':
+				# Rest doesn't do anything normally, but it does extend the length of the song
+				start = float(line[0])
+				dur = float(line[3])
+				self.coda = max(self.coda, start + dur)
 			else:
-				self.syllables.append(AbsSyllable(start, Syllable.fromPhonNotation(text)))
-			self.coda = max(self.coda, start)
-		elif line[1] == 'hyphen':
-			start = float(line[0])
-			self.hyphens.append(AbsHyphen(start))
-			self.coda = max(self.coda, start)
-		elif line[1] == 'rest':
-			# Rest doesn't do anything normally, but it does extend the length of the song
-			start = float(line[0])
-			dur = float(line[3])
-			self.coda = max(self.coda, start + dur)
-		else:
-			pass
+				pass
 
 	def toMono(self):
 		notes = sorted(self.notes, key=attrgetter('start'))
@@ -481,19 +503,24 @@ class Text2Phonemes:
 		return out
 
 if __name__ == '__main__':
+	from os import path
 	import argparse
+
+	basedir = path.dirname(path.realpath(__file__))
+	default_database_file = path.join(basedir, 'cmudict-0.7b')
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument('notes_file', type=argparse.FileType('r'), help='.notes file produced by LilyPond and the provided event-listener.ly file')
 	parser.add_argument('out_file', type=argparse.FileType('w'), help='MBROLA phonetics file, typically with the .pho extension')
-	parser.add_argument('-d', '--database', type=str, help='CMU database file')
+	parser.add_argument('-d', '--database', type=str, default=default_database_file, help='CMU database file')
 
 	args = parser.parse_args()
 
 	abs_score = AbsScore()
 
 	for line in args.notes_file:
-		abs_score.readLilyLine(line)
+		abs_score.readLine(line)
+	abs_score.processLines()
 
 	song = abs_score.toMono()
 
@@ -502,4 +529,5 @@ if __name__ == '__main__':
 		song.text2phonemes.read(args.database)
 
 	song.convertTextMode()
-	args.out_file.write(song.asMbrolaFile(3000))
+	tempo = 120.0
+	args.out_file.write(song.asMbrolaFile(4000.0 * 60 / tempo))

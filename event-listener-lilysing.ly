@@ -43,7 +43,7 @@ staff has an instrument name.  If the staff has no instrument
 name, it uses "unnamed-staff" for that part of the filename."
    (if (eq? (ly:context-name context) 'Lyrics)
      (set! context (ly:context-property context 'associatedVoiceContext)))
-   (let* ((inst-name (ly:context-property context 'instrumentName)))
+    (let* ((inst-name (ly:context-id context)))
      (string-concatenate (list
                           (substring (object->string (command-line))
                            ;; filename without .ly part
@@ -52,7 +52,7 @@ name, it uses "unnamed-staff" for that part of the filename."
                           "-"
                           (if (string? inst-name)
                               inst-name
-                            "unnamed-staff")
+                            "unnamed")
                           ".notes"))))
 
 #(define (format-moment moment)
@@ -201,17 +201,19 @@ as an engraver for convenience."
                  left-text)))
 
 #(define (format-lyric engraver event)
-   (let* ((tag (ly:event-property event 'input-tag)))
-     (if (not (symbol? tag))
-       (set! tag 'phon))
-     (print-line engraver
-                 "lyric"
-                 (ly:event-property event 'text)
-                 (ly:format "~a" tag))))
+   (print-line engraver
+               "lyric"
+               (ly:event-property event 'text)))
 
 #(define (format-hyphen engraver event)
    (print-line engraver
                "hyphen"))
+
+#(define (format-lilysing engraver event)
+   (let* ((cmd (ly:event-property event 'input-tag)))
+     (print-line engraver
+                 "lilysing"
+                 (ly:format "~a" cmd))))
 
 %%%% The actual engraver definition: We just install some listeners so we
 %%%% are notified about all notes and rests. We don't create any grobs or
@@ -234,32 +236,49 @@ as an engraver for convenience."
 	       (decrescendo-event . format-decresc)
 	       (text-span-event . format-textspan)
 	       (glissando-event . format-glissando)
-	       (tie-event . format-tie)))
+	       (tie-event . format-tie)
+         (lilysing-event . format-lilysing)))
   }
   \context {
   \Lyrics
   \consists #(make-engraver
               (listeners
          (lyric-event . format-lyric)
-         (hyphen-event . format-hyphen)))
+         (hyphen-event . format-hyphen)
+         (lilysing-event . format-lilysing)))
   }
 }
 
+%%%%%%%%%%%%%%%%%%%%%%
 
-lilysingText =
-#(define-music-function (parser location music) (ly:music?)
-  (music-map
-    (lambda (ev)
-      (if (eq? (ly:music-property ev 'name) 'LyricEvent)
-        (ly:music-set-property! ev 'input-tag 'text))
-      ev)
-    music))
+#(define-event-class 'lilysing-event 'music-event)
 
-lilysingPhoneme =
-#(define-music-function (parser location music) (ly:music?)
-  (music-map
-    (lambda (ev)
-      (if (eq? (ly:music-property ev 'name) 'LyricEvent)
-        (ly:music-set-property! ev 'input-tag 'phon))
-      ev)
-    music))
+#(define lilysing-types
+   '(
+     (LilysingEvent
+      . ((description . "A LilySing-specific event.")
+         (types . (lilysing-event general-music event))
+         ))
+     ))
+
+#(set!
+  lilysing-types
+  (map (lambda (x)
+         (set-object-property! (car x)
+                               'music-description
+                               (cdr (assq 'description (cdr x))))
+         (let ((lst (cdr x)))
+           (set! lst (assoc-set! lst 'name (car x)))
+           (set! lst (assq-remove! lst 'description))
+           (hashq-set! music-name-to-property-table (car x) lst)
+           (cons (car x) lst)))
+       lilysing-types))
+
+#(set! music-descriptions
+       (append lilysing-types music-descriptions))
+
+#(set! music-descriptions
+       (sort music-descriptions alist<?))
+
+lilysing = #(define-music-function (parser location cmd) (string?)
+              (make-music 'LilysingEvent 'input-tag cmd))
