@@ -15,11 +15,11 @@ VOWELS = 'r= i A u I E { V U @ EI AI OI @U aU O Or'.split()
 
 CONSONANT_DURS = {
 	'_': 40,
-	't': 40,
-	'r': 40,
-	'b': 40,
-	'n': 30,
-	'default': 40
+	't': 10,
+	'r': 10,
+	'b': 10,
+	'n': 10,
+	'default': 10
 }
 
 cmu_vowel_re = re.compile(r'^(\w+)(\d+)$')
