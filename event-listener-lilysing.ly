@@ -36,6 +36,8 @@
 
 %%%% Helper functions
 
+#(define lilysing-notes-files '())
+
 #(define (filename-from-staffname context)
    "Constructs a filename in the form
 @file{@var{original_filename}-@var{staff_instrument_name}.notes} if the
@@ -101,7 +103,12 @@ optionally outputs to the console as well.  context may be specified
 as an engraver for convenience."
    (if (ly:translator? context)
        (set! context (ly:translator-context context)))
-   (let* ((p (open-file (filename-from-staffname context) "a")))
+   (let* ((filename (filename-from-staffname context))
+          (p (open-file filename "a")))
+    (if (not (member filename lilysing-notes-files))
+      (begin
+        (close (open-file filename "w"))
+        (set! lilysing-notes-files (cons filename lilysing-notes-files))))
      ;; for regtest comparison
     (if (defined? 'EVENT_LISTENER_CONSOLE_OUTPUT)
      (ly:progress
