@@ -14,7 +14,7 @@ event_listener_file = path.join(basedir, 'event-listener-lilysing.ly')
 lilysing_file = path.join(basedir, 'lilysing.py')
 mbrola_voice_file = path.join(basedir, 'us2')
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description='A script to automate the various steps in Lilysing usage.')
 parser.add_argument('input_file', type=str, help='LilyPond input file')
 parser.add_argument('-d', '--debug', action='store_true', help="Don't delete intermediate .notes and .pho files")
 
@@ -43,11 +43,11 @@ for notes in next(os.walk('.'))[2]:
 		printAndRun(['python3', lilysing_file, notes, pho])
 		printAndRun(['mbrola', mbrola_voice_file, pho, wav])
 
-printAndRun(['sox'] + [wav for wav in wavfiles] + ['--combine', 'merge', base_filename + '.wav'])
+printAndRun(['sox'] + wavfiles + ['--combine', 'merge', base_filename + '.wav'])
 
 # Remove intermediary files
 if not args.debug:
-	exts = ('.notes', '.pho')
+	exts = ('.notes', '.pho', '.wav')
 
 	for name in next(os.walk('.'))[2]:
 		if name.startswith(base_filename + '-') and any([name.endswith(ext) for ext in exts]):
