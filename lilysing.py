@@ -132,7 +132,6 @@ class AbsScore:
 		return abs(t1 - t2) < 1e-5
 
 	def readLine(self, line):
-		line = line.strip().split('\t')
 		if len(line) < 2:
 			return
 		line[0] = float(line[0])
@@ -421,6 +420,7 @@ class Song:
 
 	def asMbrolaFile(self, scale):
 		lines = [line for event in self.events for line in event.toMbrola(scale)]
+		lines[-1][-1] = 101
 		return '\n'.join([' '.join(map(str, line)) for line in lines])
 
 class Text2Phonemes:
@@ -503,31 +503,73 @@ class Text2Phonemes:
 		return out
 
 if __name__ == '__main__':
+	import os
 	from os import path
 	import argparse
+	import subprocess
+
+	def callAndPrint(cmd):
+		print(' '.join(cmd))
+		subprocess.call(cmd)
 
 	basedir = path.dirname(path.realpath(__file__))
 	default_database_file = path.join(basedir, 'cmudict-0.7b')
+	mbrola_voice_file = path.join(basedir, 'us2')
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument('notes_file', type=argparse.FileType('r'), help='.notes file produced by LilyPond and the provided event-listener.ly file')
-	parser.add_argument('out_file', type=argparse.FileType('w'), help='MBROLA phonetics file, typically with the .pho extension')
+	parser.add_argument('notes_file', type=str, help='.notes file produced by LilyPond and the provided event-listener-lilysing.ly file')
 	parser.add_argument('-d', '--database', type=str, default=default_database_file, help='CMU database file')
+	parser.add_argument('-k', '--keep', action='store_true', help='Keep all intermediary files (.pho, .wav).')
 
 	args = parser.parse_args()
 
-	abs_score = AbsScore()
+	base_file = args.notes_file.rpartition('.')[0]
 
-	for line in args.notes_file:
-		abs_score.readLine(line)
-	abs_score.processLines()
+	notes_file = open(args.notes_file, 'r')
 
-	song = abs_score.toMono()
+	abs_scores = {}
 
-	if args.database:
-		song.text2phonemes = Text2Phonemes()
-		song.text2phonemes.read(args.database)
+	for line in notes_file:
+		line = line.strip().split('\t')
+		if len(line) < 1:
+			continue
+		if line[0] not in abs_scores:
+			abs_scores[line[0]] = AbsScore()
+		abs_scores[line[0]].readLine(line[1:])
+	
+	wav_files = []
 
-	song.convertTextMode()
-	tempo = 120.0
-	args.out_file.write(song.asMbrolaFile(4000.0 * 60 / tempo))
+	for name, abs_score in abs_scores.items():
+		abs_score.processLines()
+		song = abs_score.toMono()
+
+		if args.database:
+			song.text2phonemes = Text2Phonemes()
+			song.text2phonemes.read(args.database)
+		song.convertTextMode()
+
+		tempo = 120.0
+		pho_file = '{}.{}.pho'.format(base_file, name)
+		f = open(pho_file, 'w')
+		f.write(song.asMbrolaFile(4000.0 * 60 / tempo))
+		f.close()
+
+		wav_file = '{}.{}.wav'.format(base_file, name)
+		callAndPrint(['mbrola', mbrola_voice_file, pho_file, wav_file])
+
+		if not args.keep:
+			os.remove(pho_file)
+
+		norm_wav_file = '{}.{}.norm.wav'.format(base_file, name)
+		callAndPrint(['sox', '--norm=-3', wav_file, norm_wav_file])
+
+		if not args.keep:
+			os.remove(wav_file)
+
+		wav_files.append(norm_wav_file)
+
+	callAndPrint(['sox'] + wav_files + ['--combine', 'merge', base_file + '.wav'])
+
+	if not args.keep:
+		for wav_file in wav_files:
+			os.remove(wav_file)

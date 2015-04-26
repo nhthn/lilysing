@@ -36,26 +36,24 @@
 
 %%%% Helper functions
 
-#(define lilysing-notes-files '())
+#(define lilysing-file
+  (string-concatenate (list
+                          (substring (object->string (command-line))
+                           ;; filename without .ly part
+                           (+ (string-rindex (object->string (command-line)) #\sp) 2)
+                           (- (string-length (object->string (command-line))) 5))
+                          ".lilysing-notes")))
 
-#(define (filename-from-staffname context)
+#(close (open-file lilysing-file "w"))
+
+#(define (staffname context)
    "Constructs a filename in the form
 @file{@var{original_filename}-@var{staff_instrument_name}.notes} if the
 staff has an instrument name.  If the staff has no instrument
 name, it uses "unnamed-staff" for that part of the filename."
    (if (eq? (ly:context-name context) 'Lyrics)
      (set! context (ly:context-property context 'associatedVoiceContext)))
-    (let* ((inst-name (ly:context-id context)))
-     (string-concatenate (list
-                          (substring (object->string (command-line))
-                           ;; filename without .ly part
-                           (+ (string-rindex (object->string (command-line)) #\sp) 2)
-                           (- (string-length (object->string (command-line))) 5))
-                          "-"
-                          (if (string? inst-name)
-                              inst-name
-                            "unnamed")
-                          ".notes"))))
+    (ly:context-id context))
 
 #(define (format-moment moment)
    (exact->inexact
@@ -89,7 +87,9 @@ values.  The string ends with a newline."
     (string-append
      (string-join
        (append
-         (list (moment-grace->string moment))
+         (list
+           (staffname context)
+           (moment-grace->string moment))
          (map
              (lambda (x) (ly:format "~a" x))
              values))
@@ -103,12 +103,7 @@ optionally outputs to the console as well.  context may be specified
 as an engraver for convenience."
    (if (ly:translator? context)
        (set! context (ly:translator-context context)))
-   (let* ((filename (filename-from-staffname context))
-          (p (open-file filename "a")))
-    (if (not (member filename lilysing-notes-files))
-      (begin
-        (close (open-file filename "w"))
-        (set! lilysing-notes-files (cons filename lilysing-notes-files))))
+   (let* ((p (open-file lilysing-file "a")))
      ;; for regtest comparison
     (if (defined? 'EVENT_LISTENER_CONSOLE_OUTPUT)
      (ly:progress
