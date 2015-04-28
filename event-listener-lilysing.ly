@@ -221,9 +221,7 @@ as an engraver for convenience."
 %%%% are notified about all notes and rests. We don't create any grobs or
 %%%% change any settings.
 
-\layout {
-  \context {
-  \Voice
+lilysing = \with {
   \consists #(make-engraver
               (listeners
 	       (tempo-change-event . format-tempo)
@@ -239,16 +237,9 @@ as an engraver for convenience."
 	       (text-span-event . format-textspan)
 	       (glissando-event . format-glissando)
 	       (tie-event . format-tie)
-         (lilysing-event . format-lilysing)))
-  }
-  \context {
-  \Lyrics
-  \consists #(make-engraver
-              (listeners
          (lyric-event . format-lyric)
          (hyphen-event . format-hyphen)
          (lilysing-event . format-lilysing)))
-  }
 }
 
 %%%%%%%%%%%%%%%%%%%%%%
@@ -282,5 +273,5 @@ as an engraver for convenience."
 #(set! music-descriptions
        (sort music-descriptions alist<?))
 
-lilysing = #(define-music-function (parser location cmd) (string?)
-              (make-music 'LilysingEvent 'input-tag cmd))
+lilysingCmd = #(define-music-function (parser location cmd) (string?)
+                 (make-music 'LilysingEvent 'input-tag cmd))

@@ -9,7 +9,7 @@ global = {
 }
 
 words = \lyrics {
-  \lilysing #"textmode"
+  \lilysingCmd #"textmode"
   I will ne -- ver give up
   I will ne -- ver step down
   Yeah, yeah, yeah
@@ -59,4 +59,8 @@ melThree = \new Voice = "voice3" {
     \new Staff { \global \melTwo }
     \new Staff { \global \melThree }
   >>
+  \layout {
+    \context { \Voice \lilysing }
+    \context { \Lyrics \lilysing }
+  }
 }
