@@ -420,6 +420,7 @@ class Song:
 
 	def asMbrolaFile(self, scale):
 		lines = [line for event in self.events for line in event.toMbrola(scale)]
+		# Some mbrola bug I don't understand
 		lines[-1][-1] = 101
 		return '\n'.join([' '.join(map(str, line)) for line in lines])
 
@@ -517,18 +518,25 @@ if __name__ == '__main__':
 	mbrola_voice_file = path.join(basedir, 'us2')
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument('notes_file', type=str, help='.notes file produced by LilyPond and the provided event-listener-lilysing.ly file')
+	parser.add_argument('input_file', type=str, help='.lilysing-notes file.'
+	                    'You can also specify an .ly file and lilypond will be invoked first.')
 	parser.add_argument('-d', '--database', type=str, default=default_database_file, help='CMU database file')
 	parser.add_argument('-k', '--keep', action='store_true', help='Keep all intermediary files (.pho, .wav).')
 
 	args = parser.parse_args()
 
-	base_file = args.notes_file.rpartition('.')[0]
+	base_file = args.input_file.rpartition('.')[0]
 
-	notes_file = open(args.notes_file, 'r')
+	# Compile LilyPond files
+	if args.input_file.endswith('.ly'):
+		callAndPrint(['lilypond', args.input_file])
+		args.input_file = base_file + '.lilysing-notes'
+
+	notes_file = open(args.input_file, 'r')
 
 	abs_scores = {}
 
+	# Separate the notes file into AbsScores
 	for line in notes_file:
 		line = line.strip().split('\t')
 		if len(line) < 1:
@@ -536,6 +544,8 @@ if __name__ == '__main__':
 		if line[0] not in abs_scores:
 			abs_scores[line[0]] = AbsScore()
 		abs_scores[line[0]].readLine(line[1:])
+
+	# Process the AbsScores
 	
 	wav_files = []
 
@@ -554,12 +564,14 @@ if __name__ == '__main__':
 		f.write(song.asMbrolaFile(4000.0 * 60 / tempo))
 		f.close()
 
+		# MBROLA
 		wav_file = '{}.{}.wav'.format(base_file, name)
 		callAndPrint(['mbrola', mbrola_voice_file, pho_file, wav_file])
 
 		if not args.keep:
 			os.remove(pho_file)
 
+		# Sox normalization
 		norm_wav_file = '{}.{}.norm.wav'.format(base_file, name)
 		callAndPrint(['sox', '--norm=-3', wav_file, norm_wav_file])
 
@@ -568,6 +580,7 @@ if __name__ == '__main__':
 
 		wav_files.append(norm_wav_file)
 
+	# Combining into a single wav file
 	callAndPrint(['sox'] + wav_files + ['--combine', 'merge', base_file + '.wav'])
 
 	if not args.keep:
